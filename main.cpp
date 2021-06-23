@@ -32,20 +32,16 @@ int main(){
    while(1){
       if(uart.readable()){
             uart.read(recv, sizeof(recv));
-            //if (recv[0] == 'a') a = 1;
-            //pc.write(recv, sizeof(recv));
             if(recv[0] == '(') now = 0;
             else if(recv[0] == ')') {
                 tmp[now] = recv[0];
                 if(re) strcpy(recvall, tmp);
-                //if(re && a) strcpy(recvall2, tmp);
-                //a = 0;
                 strcpy(tmp, "");
             }
             else if (recv[0] != ',') {
                 tmp[now++] = recv[0];
             }
-      } 
+      }
    }
 }
 
@@ -64,26 +60,16 @@ void Follow(){
     float r;
     bool stop = false;
     char buff[25];
-    int task = 0;
-    sprintf(buff, "FIRST Stage\r\n");
-    xbee.write(buff, 12);
-    
-    while(1){
+    int mission = 0;
+    sprintf(buff, "FIRST Stage\r\n");     // Start the from the start line
+    xbee.write(buff, 12);                     // Print it on the screen using the xbee
+
+    while(1) {               // Read in the information from the openMV
         re = 0;
-        //printf("%s\n", recvall);
         i = 0;
         tz = 0;
         len = strlen(recvall);
-        if (recvall[0] == 'a'){
-            i = 1;
-            while(recvall[i] != ')') {
-                n[0][i-1] = recvall[i];
-                i++;
-            }
-            tz = atoi(n[0]);
-            printf("tz = %d\n", tz);
-        }
-        else {
+        if (recvall[0] == 'r') {
             i = 0;
             j = 0;
             count = 0;
@@ -108,11 +94,18 @@ void Follow(){
                     x1 = x2;
                     x2 = temp;
                 }
-
-                printf("%d %d %d %d\n", x1, y1, x2 ,y2);
             }
         }
-        len = strlen(recvall);
+        else {
+            i = 1;
+            while(recvall[i] != ')') {
+                n[0][i-1] = recvall[i];
+                i++;
+            }
+            tz = atoi(n[0]);           // The distance between the april tag
+            printf("tz = %d\n", tz);
+        }
+
         for (i = 0; i < 4; i++) {
             for (j = 0; j < 4; j++) {
                 n[i][j] = '\0';
@@ -120,84 +113,64 @@ void Follow(){
         }
         for (i = 0; i < 50; i++) {
             recvall[i] = '\0';
-        
         }
+
         re = 1;
         dx = x1 - x2;
         dy = y1 - y2;
-
-        if (abs(dx) + abs(dy) > 0) {
-            if (x1 < 70) {
-                car.turn(25, 1);
-                printf("RRRR\n");
+        double r = (float) sqrt(dx*dx + dy*dy);
+        // Detect the line
+        if (r != 0) {
+            if (x1 < 68) {
+                car.turn(35, 1);
                 ThisThread::sleep_for(50ms);
-                car.stop();
             }
-            else if (x1 > 90) {
-                car.turn(-25, 1);
-                printf("LLLLL\n");
+            else if (x1 > 92) {
+                car.turn(-35, 1);
                 ThisThread::sleep_for(50ms);
-                car.stop();
             }
             else {
                 car.goStraight(35);
             }
 
-            if (tz >= -4 && tz != 0) {
-                if (task == 0) {
-                    sprintf(buff, "SECOND Stage\r\n");
+            // Detect the april tag
+            if (tz >= -3 && tz != 0) {
+                if (mission == 0) {
+                    sprintf(buff, "SECOND Stage\r\n");    // Start to cross the obstacle
                     xbee.write(buff, 13);
-                    car.goStraight(100);
-                    ThisThread::sleep_for(1500ms);
-                
-                    car.stop();
-                    ThisThread::sleep_for(1000ms);
 
+                    // the speed and distance is fixed
+                    // turn left and go straight
                     car.turn(-100, 1);
-                    ThisThread::sleep_for(630ms);
-
+                    ThisThread::sleep_for(650ms);
                     car.goStraight(100);
                     ThisThread::sleep_for(2500ms);
-
                     car.stop();
                     ThisThread::sleep_for(1000ms);
+                    for (int i = 0; i < 2; i++) {
+                        // turn right and go straight twice
+                        car.turn(100, 1);
+                        ThisThread::sleep_for(800ms);
+                        car.goStraight(100);
+                        ThisThread::sleep_for(3000ms);
+                        car.stop();
+                        ThisThread::sleep_for(1000ms);
+                    }
 
-                    car.turn(100, 1);
-                    ThisThread::sleep_for(680ms);
-
-                    car.goStraight(100);
-                    ThisThread::sleep_for(3500ms);
-
-                    car.stop();
-                    ThisThread::sleep_for(1000ms);
-
-                    car.turn(100, 1);
-                    ThisThread::sleep_for(1000ms);
-
-                    car.goStraight(1000);
-                    ThisThread::sleep_for(1300ms);
-
-                    car.stop();
-                    ThisThread::sleep_for(1000ms);
-
-                    car.turn(-100, 1);
+                    car.turn(-100, 1);    // turn left to detect the second line
                     ThisThread::sleep_for(450ms);
-                    printf("detect the line\n");
-                    task = 1;
+
+                    mission = 1;
                     sprintf(buff, "END1\r\n");
                     xbee.write(buff, 6);
-                } else if (task == 1){
+                }
+                else if (mission == 1){
                     car.stop();
                     ThisThread::sleep_for(1000ms);
                     sprintf(buff, "END2\r\n");
                     xbee.write(buff, 6);
-                    task++;
                 }
             }
-            
-        }
-        else{
-            car.stop();
         }
         ThisThread::sleep_for(50ms);
     }
